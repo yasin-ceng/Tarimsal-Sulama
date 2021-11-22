@@ -18,3 +18,7 @@
 - LDR Diyot
 - Toprak Nem Sensörü
 - DS1307 
+
+_Sistem Tasarım Görseli_
+
+![sistemCizimi2](https://user-images.githubusercontent.com/59895745/142854769-1099e940-6a5b-4cf9-ad2a-d30089e6e7b0.jpg)
