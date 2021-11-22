@@ -4,9 +4,9 @@
 
 ### _Sistem Tanıtımı_
 - Sulama sistemi arduino mikroişlemci ile tasarlanmıştır.
-- Buna göre haftanın iki günü bahçede sulama işlemi otomatik olrak gerçekleşebilir.
-- Bu sitemde güneş paneller mevcut olduğundan sulama konusunda sitem bağımsız çalışabilmektedir.
-- Proje tasarımında yağmur yağdığında, güneş olmadığında veya sulama işlemine gerek duyulmayacak kadar toprak nem oranı var ise sulama devreye girmez.
+- Buna göre haftanın iki günü bahçede sulama işlemi otomatik olarak gerçekleşebilir.
+- Bu sistemde güneş panelleri mevcut olduğundan sulama konusunda sistem bağımsız çalışabilmektedir.
+- Sulama sistemi yağmur yağdığında, güneş olmadığında veya sulama işlemine gerek duyulmayacak kadar toprak nem oranı var ise devreye girmez.
 - Manuel olarak başlatma veya durdurma seçenekleri mevcuttur.
 
 ### _Kullanılan Ekipman ve Teknolojiler_
