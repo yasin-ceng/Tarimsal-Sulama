@@ -1,0 +1,289 @@
+#include <Wire.h>
+
+#include "RTClib.h"
+
+#include <LiquidCrystal.h>
+
+
+//RTC Zamanlayici Tanimlamalari
+RTC_DS1307 rtc;
+char daysOfTheWeek[7][12] = {
+  "Pazar",
+  "Pazartesi",
+  "Sali",
+  "Carsamba",
+  "Persembe",
+  "Cuma",
+  "Cumartesi"
+};
+
+//LCD pin tanimlamalari
+const int rs = 12,
+  en = 11,
+  d4 = 5,
+  d5 = 4,
+  d6 = 3,
+  d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+//fonksiyonların deklarasyonu
+void zamanlayici();
+void sulamaBaslat(String gun, byte saat, byte dakika);
+void seriPortBilgi(String gun, byte saat, byte gunes, bool rainFlag, int toprakNem);
+void lcdBilgi(String gun, byte saat, byte dakika, byte gunes, bool rainFlag, int toprakNem);
+
+bool otomasyonDevrede = false;
+bool sulamaDevrede = false;
+
+
+
+void setup() {
+
+  //RTC ayar ve bağlantı tanımlamaları
+  while (!Serial);
+  Serial.begin(57600);
+  if (!rtc.begin()) {
+    Serial.println("RTC Bulunamadı !");
+    while (1);
+  }
+  if (!rtc.isrunning()) {
+    Serial.println("RTC ÇALIŞMIYOR !!");
+    // following line sets the RTC to the date & time this sketch was compiled
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    // This line sets the RTC with an explicit date & time, for example to set
+    // April 17, 2021 at 3pm you would call:
+    // rtc.adjust(DateTime(2021, 4, 17, 15, 0, 0));
+  }
+
+  lcd.begin(16, 2);
+
+  //pinlerin I/O ve default tanımlamaları 
+  pinMode(9, INPUT);
+  pinMode(7, INPUT);
+  pinMode(8, OUTPUT);
+
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  digitalWrite(8, LOW);
+}
+
+void loop() {
+
+  //Gün ve Saati Kontrol Et;
+  zamanlayici();
+
+}
+
+void zamanlayici() {
+
+  //yağmur sensörü, ışık sensörü, toprak nem sensörü verilerini oku ve map et
+  bool rainFlag = digitalRead(9);
+  int gunes = analogRead(A3);
+  gunes = map(gunes, 0, 1023, 0, 255);
+  int toprakNem = analogRead(A2);
+  toprakNem = map(toprakNem, 0, 1023, 0, 255 );
+  otomasyonDevrede = false;
+
+  //RTC üzerinden zamanı oku
+  DateTime now = rtc.now();
+
+  //lcd cursorunu başa al
+  lcd.setCursor(0, 0);
+
+  //gün, saat ve dakika bilgilerini ilgili değişkenlere ata
+  String gun = (daysOfTheWeek[now.dayOfTheWeek()]);
+  byte saat = (now.hour());
+  byte dakika = (now.minute());
+  
+
+  //haftanın belirli günlerinde ve saatinde sulama yapmak üzere kontrollerini yap
+  //Sulama zamanı geldiyse yağmur yok ve güneşli olması durumunu kontrol etmek için ilerle
+  if (gun == "Pazar" || gun == "Pazartesi" || gun == "Sali" || gun == "Carsamba" ||
+    gun == "Persembe" || gun == "Cuma" || gun == "Cumartesi") {
+    if ( saat ==15 ) {
+      //tüm koşullar s ağlandığında 2 saat boyunca sulama yap
+      //yağmur var mı ve hava güneşli mi kontrol et
+      if ( rainFlag && (gunes > 127) && (toprakNem > 80) && !otomasyonDevrede ) {
+
+        sulamaBaslat(gun, saat, dakika);
+        otomasyonDevrede = true;
+      } else if (!rainFlag && digitalRead(7) != 1) {
+        digitalWrite(8, LOW);
+        otomasyonDevrede=false;
+        for (int i = 0; i < 5; i++) {
+          lcd.clear();
+          delay(200);
+          lcd.setCursor(0, 0);
+          lcd.print("Sulama Durdu");
+          lcd.setCursor(0, 1);
+          lcd.print("YAGMUR VAR !");
+          delay(500);
+        }
+
+      } else if (gunes <= 127 && digitalRead(7) != 1) {
+        otomasyonDevrede=false;
+        digitalWrite(8, LOW);
+        for (int i = 0; i < 5; i++) {
+          lcd.clear();
+          delay(200);
+          lcd.setCursor(0, 0);
+          lcd.print("Sulama Durdu");
+          lcd.setCursor(0, 1);
+          lcd.print("GUNES YETERSIZ !");
+          delay(500);
+        }
+      }
+      else if (toprakNem <= 80 && digitalRead(7) != 1) {
+        otomasyonDevrede=false;
+        digitalWrite(8, LOW);
+        for (int i = 0; i < 5; i++) {
+          lcd.clear();
+          delay(200);
+          lcd.setCursor(0, 0);
+          lcd.print("Sulama Durdu");
+          lcd.setCursor(0, 1);
+          lcd.print("TOPRAK ISLAK!");
+          delay(500);
+        }
+      }
+        
+    }
+
+  }
+
+  //istenildiğinde sistem başlatılmak üzere gerekli kontrolleri yap
+  //eğer anahtar ON konumundaysa sulamaya başla
+  if (digitalRead(7) == 1 && !sulamaDevrede && !otomasyonDevrede ) {
+    digitalWrite(8, HIGH);
+    sulamaDevrede=true;
+    delay(100);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Manuel Mod");
+    lcd.setCursor(0, 1);
+    lcd.print("Sistem Aktif");
+    delay(3000);
+    
+
+  }
+  //eğer anahtar OFF konumundaysa sulamayı bitir
+  else if (digitalRead(7) == 0 && sulamaDevrede && !otomasyonDevrede ) {
+    digitalWrite(8, LOW);
+    sulamaDevrede=false;
+    delay(100);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Manuel Mod");
+    lcd.setCursor(0, 1);
+    lcd.print("Sistem Kapali");
+    delay(3000);
+  }
+  if(!sulamaDevrede)
+    if(!otomasyonDevrede)
+      digitalWrite(8,LOW);
+
+  seriPortBilgi(gun, saat, gunes, rainFlag, toprakNem);
+  lcdBilgi(gun, saat, dakika, gunes, rainFlag, toprakNem);
+  delay(3000);
+
+}
+void lcdBilgi(String gun, byte saat, byte dakika, byte gunes, bool rainFlag, int toprakNem) {
+  if (!otomasyonDevrede) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Manuel Mod");
+    lcd.setCursor(0, 1);
+    lcd.print(gun);
+    lcd.print(" ");
+    lcd.print(saat);
+    lcd.print(":");
+    lcd.print(dakika);
+   
+    
+  }
+  if (otomasyonDevrede) {
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    lcd.setCursor(0, 0);
+    lcd.print("YAGMUR:");
+    if (!rainFlag)
+      lcd.print("Var");
+    else if (rainFlag)
+      lcd.print("Yok");
+    delay(1000);
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    lcd.setCursor(0, 0);
+    lcd.print("GUNES:");
+    if (gunes > 127)
+      lcd.print("Yeterli");
+    if (gunes < 127)
+      lcd.print("Yetersiz");
+    delay(1000);
+    lcd.setCursor(0,0);
+    lcd.print("                ");
+    lcd.setCursor(0,0);
+    lcd.print("Toprak Nem:");
+    lcd.print(toprakNem);    
+    delay(1000);
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    lcd.setCursor(0, 0);
+    lcd.print("SAAT:");
+    lcd.print(saat);
+    lcd.print(":");
+    lcd.print(dakika);
+    delay(1000);
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    lcd.setCursor(0, 0);
+    lcd.print("Otomatik Sulama ");
+    lcd.print(saat);
+    delay(1000);
+    
+  }
+}
+
+void seriPortBilgi(String gun, byte saat, byte gunes, bool rainFlag, int toprakNem) {
+  //seri port üzerinden gerektiğinde sistemi kontrol etmek üzere bilgi yayınla
+  Serial.print("Gun   : ");
+  Serial.println(gun);
+
+  Serial.print("Saat  : ");
+  Serial.println(saat);
+
+  Serial.print("ISIK  : ");
+  Serial.println(gunes);
+  
+
+  Serial.print("Yagmur: ");
+  if (rainFlag == 0)
+    Serial.println("Var");
+  else if (rainFlag == 1)
+    Serial.println("Yok");
+
+  Serial.print("Toprak Nem: ");
+  Serial.println(toprakNem);
+
+  Serial.println("");
+
+}
+void sulamaBaslat(String gun, byte saat, byte dakika ) {
+  
+  
+  //lcd ekran üzerinden kullanıcıya bilgi ver
+  if (!digitalRead(8)) {
+  
+    lcd.clear();
+    lcd.print("Otomatik Sulama");
+    lcd.setCursor(0, 1);
+    lcd.print(saat);
+    lcd.print(":");
+    lcd.print(dakika);
+    lcd.print(" (2h)");
+
+    digitalWrite(8, HIGH);
+    delay(2000);
+
+  }
+}
